@@ -2,7 +2,7 @@ mod extractors;
 mod initializers;
 
 pub use extractors::Handlers;
-use initializers::ghanayello_pages_url_constructor;
+use initializers::ghanayello;
 pub use initializers::{dummy, edusko_job_spawner, Site};
 use reqwest::Response;
 use tokio::{
@@ -20,9 +20,10 @@ pub struct FetchedResult {
 /// pages `Site`s from spawned tasks are channeled down stream to request spawner
 pub async fn job_spawner(sender: mpsc::Sender<Site>) -> Result<(), ()> {
     let _ = try_join!(
-        edusko_job_spawner(sender.clone()),
+        // edusko_job_spawner(sender.clone()),
         dummy(sender.clone()),
-        ghanayello_pages_url_constructor(sender.clone())
+        // schoool_compass_spawner(sender.clone())
+        ghanayello::extract_urls(sender.clone())
     );
     Ok(())
 }

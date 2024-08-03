@@ -6,8 +6,8 @@ use tokio::{sync::mpsc, try_join};
 async fn main() {
     let now = Instant::now();
     let mut count = 0u32;
-    let (sender, receiver) = mpsc::channel(1000);
-    let (result_tx, mut result_rx) = mpsc::channel(1000);
+    let (sender, receiver) = mpsc::channel(5000);
+    let (result_tx, mut result_rx) = mpsc::channel(5000);
 
     let _ = try_join!(job_spawner(sender), request_spawner(receiver, result_tx));
 

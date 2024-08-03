@@ -2,6 +2,7 @@
 pub enum Handlers {
     Edusko,
     Ghanayello,
+    SchoolCompass,
 }
 
 impl Handlers {
