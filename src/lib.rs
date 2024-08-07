@@ -2,8 +2,8 @@ mod extractors;
 mod initializers;
 
 pub use extractors::Handlers;
-use initializers::ghanayello;
 pub use initializers::{dummy, edusko_job_spawner, Site};
+use initializers::{ghanayello, schoolcompass};
 use reqwest::Response;
 use tokio::{
     sync::mpsc::{self, Sender},
@@ -22,8 +22,8 @@ pub async fn job_spawner(sender: mpsc::Sender<Site>) -> Result<(), ()> {
     let _ = try_join!(
         // edusko_job_spawner(sender.clone()),
         dummy(sender.clone()),
-        // schoool_compass_spawner(sender.clone())
-        ghanayello::extract_urls(sender.clone())
+        schoolcompass::extract_urls(sender.clone()),
+        // ghanayello::extract_urls(sender.clone())
     );
     Ok(())
 }
@@ -38,23 +38,22 @@ pub async fn request_spawner(
         let sender = result_tx.clone();
         tokio::task::spawn(async move {
             let ident = format!("{:?}", site);
-            println!("\n=======================fetching_data for {:?}\n", ident);
             fetch_data(site, sender).await;
             println!("\n___________end of fetching for site: {}\n", ident);
         });
     }
+
     Ok(())
 }
 
 async fn fetch_data(site: Site, sender: Sender<FetchedResult>) {
     if let Ok(res) = reqwest::get(site.url).await {
-        sender
+        let _ = sender
             .send(FetchedResult {
                 response: res,
                 handler: site.handler,
             })
-            .await
-            .expect("channel buffer is probably full");
+            .await;
     }
 }
 

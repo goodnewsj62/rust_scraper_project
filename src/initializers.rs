@@ -22,12 +22,13 @@ pub async fn edusko_job_spawner(sender: mpsc::Sender<Site>) -> Result<(), ()> {
 
     let base_url = Arc::new("https://api.edusko.com/api/v1/school/");
     let params: Vec<String> = vec!["nigeria".into(), "ghana".into(), "kenya".into()];
+    let mut handlers = Vec::new();
 
     for country in params {
         let owned_url = Arc::clone(&base_url);
         let cloned_snd = sender.clone();
 
-        task::spawn(async move {
+        let handler = task::spawn(async move {
             let url = format!("{}?country={}&limit=50&page=1", *owned_url, country);
             let data = reqwest::get(url).await;
             //TODO: try again incase it fails
@@ -61,14 +62,18 @@ pub async fn edusko_job_spawner(sender: mpsc::Sender<Site>) -> Result<(), ()> {
                 }
             }
         });
+
+        handlers.push(handler);
     }
-    // request async to site
-    // await and then construct
+
+    for handler in handlers {
+        let _ = handler.await;
+    }
+
     Ok(())
 }
 
 pub mod ghanayello {
-    use futures::TryFutureExt;
     use tokio::try_join;
 
     use super::*;
@@ -76,10 +81,7 @@ pub mod ghanayello {
     pub async fn extract_urls(sender: mpsc::Sender<Site>) -> Result<(), ()> {
         let (trans, recv) = mpsc::unbounded_channel();
 
-        let _ = page_spawner(trans.clone()).await;
-
-        // let _ = try_join!(, );
-        let _ = get_detail_url(sender, recv).await;
+        let _ = try_join!(page_spawner(trans), get_detail_url(sender, recv));
 
         Ok(())
     }
@@ -111,7 +113,7 @@ pub mod ghanayello {
                     };
 
                     for n in pages {
-                        sender.send(format!("{}{}/", url, n));
+                        let _ = sender.send(format!("{}{}/", url, n));
                     }
                 }
             }
@@ -124,9 +126,11 @@ pub mod ghanayello {
         sender: mpsc::Sender<Site>,
         mut url_reciever: mpsc::UnboundedReceiver<String>,
     ) -> Result<(), ()> {
+        let mut hanlers = Vec::new();
+
         while let Some(url) = url_reciever.recv().await {
             let sender_clone = sender.clone();
-            task::spawn(async move {
+            let handler = task::spawn(async move {
                 if let Ok(res) = reqwest::get(url).await {
                     if let Ok(html) = res.text().await {
                         let urls = {
@@ -159,65 +163,125 @@ pub mod ghanayello {
                     }
                 }
             });
+
+            hanlers.push(handler);
         }
 
+        for handler in hanlers {
+            let _ = handler.await;
+        }
         Ok(())
     }
 }
 
 pub mod schoolcompass {
-    use futures::TryFutureExt;
     use tokio::try_join;
 
     use super::*;
 
     pub async fn extract_urls(sender: mpsc::Sender<Site>) -> Result<(), ()> {
-        // let (trans, recv) = mpsc::unbounded_channel();
+        let (trans, recv) = mpsc::unbounded_channel();
 
-        // let _ = try_join!(page_spawner(trans.clone()), get_detail_url(sender, recv));
+        let _ = try_join!(page_spawner(trans), get_detail_url(sender, recv));
 
         Ok(())
     }
 
     async fn page_spawner(sender: mpsc::UnboundedSender<String>) -> Result<(), ()> {
-        let base_url = Arc::new("https://schoolscompass.com.ng/schools/");
-        let school_types: Vec<String> = vec!["primary".into(), "secondary".into()];
+        let base_url = "https://schoolscompass.com.ng/schools/";
 
-        for school_type in school_types {
-            let cloned_sender = sender.clone();
-            let url = base_url.clone();
+        let cloned_sender = sender.clone();
+        task::spawn(async move {
+            extract_pages(cloned_sender, "secondary", &base_url).await;
+        });
 
-            task::spawn(async move {
-                let url = format!("{}{}", *url, school_type);
-                if let Ok(data) = reqwest::get(url.clone()).await {
-                    if let Ok(html) = data.text().await {
-                        let pages = {
-                            let document = Html::parse_document(&html);
-
-                            let scroller_selector =
-                                Selector::parse(r#"a[class="page-link"]"#).unwrap();
-                            document
-                                .select(&scroller_selector)
-                                .into_iter()
-                                .flat_map(|v| v.text())
-                                .filter_map(|text| text.trim().parse::<u32>().ok())
-                                .last()
-                                .expect("did not get a number")
-                        };
-
-                        for n in 0..pages {
-                            let _ = cloned_sender.send(format!("{}/?page={}", url, n));
-                        }
-                    }
-                }
-            });
-        }
+        task::spawn(async move {
+            extract_pages(sender, "primary", &base_url).await;
+        });
 
         Ok(())
     }
 
-    async fn schoool_compass_spawner(sender: mpsc::Sender<Site>) -> Result<(), ()> {
+    async fn get_detail_url(
+        sender: mpsc::Sender<Site>,
+        mut url_reciever: mpsc::UnboundedReceiver<String>,
+    ) -> Result<(), ()> {
+        let mut hanlers = Vec::new();
+
+        while let Some(url) = url_reciever.recv().await {
+            let sender_clone = sender.clone();
+            let handler = task::spawn(async move {
+                if let Ok(res) = reqwest::get(url).await {
+                    if let Ok(html) = res.text().await {
+                        let urls: Vec<String> = {
+                            let document = Html::parse_document(&html);
+
+                            let scroller_selector =
+                                Selector::parse(r#".para-1.btn-school-detail"#).unwrap();
+
+                            document
+                                .select(&scroller_selector)
+                                .into_iter()
+                                .filter_map(|li| li.attr("url"))
+                                .map(|url| format!("{}", url))
+                                .collect::<Vec<_>>()
+                        };
+
+                        for url in urls {
+                            sender_clone
+                                .send(Site {
+                                    url,
+                                    handler: Handlers::SchoolCompass,
+                                })
+                                .await
+                                .unwrap_or(());
+                        }
+                    }
+                }
+            });
+
+            hanlers.push(handler);
+        }
+
+        println!("--{}--", hanlers.len());
+
+        // for handler in hanlers {
+        //     let _ = handler.await;
+        // }
+
         Ok(())
+    }
+
+    async fn extract_pages(
+        sender: mpsc::UnboundedSender<String>,
+        school_type: &str,
+        base_url: &str,
+    ) {
+        let url = format!("{}{}", base_url, school_type);
+        println!("==============={url}");
+        if let Ok(data) = reqwest::get(url.clone()).await {
+            println!("====================ok");
+            if let Ok(html) = data.text().await {
+                let pages = {
+                    let document = Html::parse_document(&html);
+
+                    let scroller_selector = Selector::parse(r#"a[class="page-link"]"#).unwrap();
+                    document
+                        .select(&scroller_selector)
+                        .into_iter()
+                        .flat_map(|v| v.text())
+                        .filter_map(|text| text.trim().parse::<u32>().ok())
+                        .last()
+                        .expect("did not get a number")
+                };
+
+                println!("pages{pages}");
+
+                for n in 0..pages {
+                    let _ = sender.send(format!("{}/?page={}", url, n));
+                }
+            }
+        }
     }
 }
 
