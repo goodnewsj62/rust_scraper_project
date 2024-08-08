@@ -11,6 +11,7 @@ mod schema;
 pub struct Site {
     pub url: String,
     pub handler: Handlers,
+    pub should_sleep: bool,
 }
 
 pub async fn dummy(sender: mpsc::Sender<Site>) -> Result<(), ()> {
@@ -47,9 +48,10 @@ pub async fn edusko_job_spawner(sender: mpsc::Sender<Site>) -> Result<(), ()> {
                             .send(Site {
                                 url: format!(
                                     "{}?country={}&limit=50&page={}",
-                                    *owned_url, country, page
+                                    *owned_url, country, page,
                                 ),
                                 handler: Handlers::Edusko,
+                                should_sleep: false,
                             })
                             .await
                             .unwrap_or(());
@@ -156,6 +158,7 @@ pub mod ghanayello {
                                 .send(Site {
                                     url,
                                     handler: Handlers::Ghanayello,
+                                    should_sleep: false,
                                 })
                                 .await
                                 .unwrap_or(())
@@ -190,13 +193,13 @@ pub mod schoolcompass {
     async fn page_spawner(sender: mpsc::UnboundedSender<String>) -> Result<(), ()> {
         let base_url = "https://schoolscompass.com.ng/schools/";
 
-        let cloned_sender = sender.clone();
-        task::spawn(async move {
-            extract_pages(cloned_sender, "secondary", &base_url).await;
-        });
+        // let cloned_sender = sender.clone();
+        // task::spawn(async move {
+        //     extract_pages(cloned_sender, "primary", &base_url).await;
+        // });
 
         task::spawn(async move {
-            extract_pages(sender, "primary", &base_url).await;
+            extract_pages(sender, "secondary", &base_url).await;
         });
 
         Ok(())
@@ -227,11 +230,14 @@ pub mod schoolcompass {
                                 .collect::<Vec<_>>()
                         };
 
+                        print!("============{}", urls.len());
+
                         for url in urls {
                             sender_clone
                                 .send(Site {
                                     url,
                                     handler: Handlers::SchoolCompass,
+                                    should_sleep: true,
                                 })
                                 .await
                                 .unwrap_or(());
@@ -245,9 +251,9 @@ pub mod schoolcompass {
 
         println!("--{}--", hanlers.len());
 
-        // for handler in hanlers {
-        //     let _ = handler.await;
-        // }
+        for handler in hanlers {
+            let _ = handler.await;
+        }
 
         Ok(())
     }
