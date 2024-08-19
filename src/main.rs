@@ -1,48 +1,47 @@
-use rust_scraper_project::{job_spawner, request_spawner};
-use std::{
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use rust_scraper_project::{job_spawner, process_data, request_spawner, FetchedResult, Resp};
+use std::sync::mpsc as syncmpsc;
+use std::time::Instant;
+
 use tokio::{sync::mpsc, try_join};
 
 #[tokio::main]
 async fn main() {
     let now = Instant::now();
     let mut count = 0u32;
-    let request_made = Arc::new(Mutex::new(0));
     let (sender, receiver) = mpsc::channel(50000);
     let (result_tx, mut result_rx) = mpsc::channel(50000);
+    let (send_process, rx_process) = syncmpsc::channel();
 
-    // let _ = job_spawner(sender.clone()).await;
+    let _ = job_spawner(sender.clone()).await;
 
-    let _ = try_join!(
-        job_spawner(sender),
-        request_spawner(receiver, result_tx, &request_made)
-    );
+    let _ = try_join!(job_spawner(sender), request_spawner(receiver, result_tx));
 
-    while let Some(message) = result_rx.recv().await {
+    while let Some(message_) = result_rx.recv().await {
         count += 1;
-        if let Ok(_) = message.response.text().await {
-            println!("-------------finished processing----------");
+        let message = match message_.response {
+            Resp::Resp(val) => val.text().await,
+            _ => Ok(String::from("")),
+        };
+
+        if let Ok(message) = message {
+            match send_process.send(FetchedResult {
+                response: Resp::Result(message),
+                handler: message_.handler,
+            }) {
+                Err(err) => println!("{err:?}"),
+                _ => println!("sent..."),
+            }
         }
     }
 
-    // while let Some(site) = receiver.recv().await {
-    //     println!("{site:?}")
-    //     // let sender = result_tx.clone();
-    //     // tokio::task::spawn(async move {
-    //     //     let ident = format!("{:?}", site);
-    //     //     println!("\n=======================fetching_data for {:?}\n", ident);
-    //     //     // fetch_data(site, None).await;
-    //     //     println!("\n___________end of fetching for site: {}\n", ident);
-    //     // });
-    // }
+    drop(send_process);
+
+    process_data(rx_process);
 
     println!("#############################################################");
 
     let elapsed = now.elapsed();
     println!("fetched {} pages in  {:.2?}", count, elapsed);
-    println!("requested{} ", request_made.lock().unwrap());
 
     // use a thread pool to process data and save to db async
 }

@@ -1,21 +1,25 @@
 mod extractors;
 mod initializers;
 
-use std::sync::{Arc, Mutex};
-
-pub use extractors::Handlers;
-pub use initializers::{dummy, edusko_job_spawner, Site};
-use initializers::{ghanayello, schoolcompass};
+pub use extractors::{handlers, Handlers};
+pub use initializers::{edusko_job_spawner, Site};
+use initializers::{ghanayello, goafricaonline_spawner};
+use rayon::prelude::*;
 use reqwest::Response;
+use std::{collections::HashMap, sync::mpsc::Receiver};
 use tokio::{
     sync::mpsc::{self, Sender},
     time::{sleep, Duration},
     try_join,
 };
-
 pub struct FetchedResult {
-    pub response: Response,
+    pub response: Resp,
     pub handler: Handlers,
+}
+
+pub enum Resp {
+    Result(String),
+    Resp(Response),
 }
 
 /// helps find out about site information like:
@@ -25,8 +29,9 @@ pub async fn job_spawner(sender: mpsc::Sender<Site>) -> Result<(), ()> {
     let _ = try_join!(
         edusko_job_spawner(sender.clone()),
         // dummy(sender.clone()),
-        schoolcompass::extract_urls(sender.clone()),
-        ghanayello::extract_urls(sender.clone())
+        // schoolcompass::extract_urls(sender.clone()),
+        ghanayello::extract_urls(sender.clone()),
+        goafricaonline_spawner(sender.clone())
     );
     Ok(())
 }
@@ -36,18 +41,11 @@ pub async fn job_spawner(sender: mpsc::Sender<Site>) -> Result<(), ()> {
 pub async fn request_spawner(
     mut receiver: mpsc::Receiver<Site>,
     result_tx: mpsc::Sender<FetchedResult>,
-    count: &Arc<Mutex<u32>>,
 ) -> Result<(), ()> {
     let mut handlers = Vec::new();
     while let Some(site) = receiver.recv().await {
         let sender = result_tx.clone();
-        let u = Arc::clone(count);
         let handler = tokio::task::spawn(async move {
-            {
-                let mut count = u.lock().expect("could not hold lock");
-                *count += 1;
-                println!("++++++++++++++++++++++++++++++++++++++++++{}", count);
-            }
             let ident = format!("{:?}", site);
 
             if site.should_sleep {
@@ -73,13 +71,41 @@ async fn fetch_data(site: Site, sender: Sender<FetchedResult>) {
     if let Ok(res) = reqwest::get(site.url).await {
         let _ = sender
             .send(FetchedResult {
-                response: res,
+                response: Resp::Resp(res),
                 handler: site.handler,
             })
             .await;
     } else {
         drop(sender);
     }
+}
+
+pub fn process_data(input: Receiver<FetchedResult>) {
+    let res: Vec<HashMap<&'static str, String>> = input
+        .into_iter()
+        .par_bridge()
+        .map(|val| {
+            let res = match val.response {
+                Resp::Result(text) => text,
+                _ => String::new(),
+            };
+
+            if res.is_empty() {
+                return vec![];
+            }
+
+            match val.handler {
+                Handlers::Edusko => handlers::edusko_data_extractor(&res),
+                Handlers::Ghanayello => vec![handlers::ghanayello_data_extractor(&res)],
+
+                Handlers::GoAfricaOnline => handlers::goafrica_data_extractor(&res),
+                Handlers::SchoolCompass => vec![],
+            }
+        })
+        .flat_map(|val| val)
+        .collect();
+
+    println!("{res:#?} = {}", res.len());
 }
 
 #[cfg(test)]

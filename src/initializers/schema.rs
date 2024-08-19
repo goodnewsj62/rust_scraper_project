@@ -1,4 +1,4 @@
-use serde::{Deserialize,  Serialize};
+use serde::{Deserialize, Serialize};
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Root {
@@ -30,15 +30,15 @@ pub struct School {
     pub city: String,
     pub discount: Option<String>,
     pub slug: String,
-    pub logo: String,
+    pub logo: Option<String>,
     pub rating: String,
     pub lga: Option<String>,
-    pub banner: String,
+    pub banner: Option<String>,
     pub owner: String,
     pub views: String,
     pub likes: String,
     pub is_verified: bool,
     pub is_featured: bool,
     pub is_active: bool,
-    pub created_by: String
+    pub created_by: String,
 }
