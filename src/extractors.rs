@@ -65,7 +65,7 @@ pub mod handlers {
                         format!("{} {} {}", school.address, school.city, school.state),
                     ),
                     ("country", school.country),
-                    ("state", school.state),
+                    ("city", school.state),
                 ]);
 
                 if let Some(logo) = school.logo {

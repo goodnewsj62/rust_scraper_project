@@ -1,11 +1,16 @@
+mod entities;
 mod extractors;
 mod initializers;
 
+use core::str;
+use entities::*;
 pub use extractors::{handlers, Handlers};
 pub use initializers::{edusko_job_spawner, Site};
 use initializers::{ghanayello, goafricaonline_spawner};
+use md5::Digest;
 use rayon::prelude::*;
 use reqwest::Response;
+use sea_orm::*;
 use std::{collections::HashMap, sync::mpsc::Receiver};
 use tokio::{
     sync::mpsc::{self, Sender},
@@ -80,7 +85,7 @@ async fn fetch_data(site: Site, sender: Sender<FetchedResult>) {
     }
 }
 
-pub fn process_data(input: Receiver<FetchedResult>) {
+pub fn process_data(input: Receiver<FetchedResult>) -> Vec<HashMap<&'static str, String>> {
     let res: Vec<HashMap<&'static str, String>> = input
         .into_iter()
         .par_bridge()
@@ -105,7 +110,58 @@ pub fn process_data(input: Receiver<FetchedResult>) {
         .flat_map(|val| val)
         .collect();
 
-    println!("{res:#?} = {}", res.len());
+    println!("{}", res.len());
+    res
+}
+
+pub async fn save_to_db(uri: &str, data: HashMap<&'static str, String>) -> Result<(), DbErr> {
+    if data.contains_key(&"name")
+        && data.contains_key(&"location")
+        && data.contains_key(&"country")
+        && data.contains_key(&"level")
+    {
+        let name = data
+            .get("name")
+            .expect("check spelling or check")
+            .to_owned();
+        let location = data
+            .get("location")
+            .expect("check spelling or check")
+            .to_owned();
+        let country = data
+            .get("country")
+            .expect("check spelling or check")
+            .to_owned();
+
+        let level = data
+            .get("level")
+            .expect("check spelling or check")
+            .to_owned();
+
+        let hash = get_hash(&name);
+
+        let school = school_data::ActiveModel {
+            school_name: ActiveValue::Set(name),
+            location: ActiveValue::Set(location),
+            name_hash: ActiveValue::Set(hash),
+            country: ActiveValue::Set(country),
+            school_type: ActiveValue::Set(level),
+            logo: ActiveValue::Set(data.get("logo").cloned()),
+            algorithm: ActiveValue::Set("md5".to_owned()),
+            city: ActiveValue::Set(data.get("city").cloned()),
+            ..Default::default()
+        };
+
+        let db = Database::connect(uri).await?;
+
+        school.insert(&db).await?;
+    }
+
+    Ok(())
+}
+
+pub fn get_hash(value: &str) -> String {
+    format!("{:x}", md5::Md5::digest(value.as_bytes()))
 }
 
 #[cfg(test)]

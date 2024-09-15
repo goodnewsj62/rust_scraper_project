@@ -1,4 +1,9 @@
-use rust_scraper_project::{job_spawner, process_data, request_spawner, FetchedResult, Resp};
+mod config;
+
+use config as conf;
+use rust_scraper_project::{
+    job_spawner, process_data, request_spawner, save_to_db, FetchedResult, Resp,
+};
 use std::sync::mpsc as syncmpsc;
 use std::time::Instant;
 
@@ -8,6 +13,7 @@ use tokio::{sync::mpsc, try_join};
 async fn main() {
     let now = Instant::now();
     let mut count = 0u32;
+    let app_config = conf::Config::build();
     let (sender, receiver) = mpsc::channel(50000);
     let (result_tx, mut result_rx) = mpsc::channel(50000);
     let (send_process, rx_process) = syncmpsc::channel();
@@ -36,7 +42,11 @@ async fn main() {
 
     drop(send_process);
 
-    process_data(rx_process);
+    let extract = process_data(rx_process);
+
+    for data in extract {
+        let _ = save_to_db(&app_config.db_uri, data).await;
+    }
 
     println!("#############################################################");
 
