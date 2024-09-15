@@ -15,4 +15,6 @@ tokio = { version = "1", features = ["full"] }
 regex = "1.10.6"
 serde_json = "1.0"
 sea-orm = { version = "1.0.0-rc.5", features = [ "sqlx-postgres","runtime-tokio-native-tls", "macros" ] }
-md5 = "0.7.0"
+md-5 = "=0.10.6"
+clap = { version = "4.5.17", features = ["derive","env"] }
+sha2 = "0.10.8"

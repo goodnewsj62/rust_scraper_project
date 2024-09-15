@@ -20,6 +20,8 @@ pub async fn edusko_job_spawner(sender: mpsc::Sender<Site>) -> Result<(), ()> {
     use schema::Root;
 
     let params: [String; 3] = ["nigeria".into(), "ghana".into(), "kenya".into()];
+    let params: [String; 1] = ["ghana".into()];
+
     // let mut handlers = Vec::new();
 
     for country in params {

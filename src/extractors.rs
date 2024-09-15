@@ -41,7 +41,10 @@ pub mod handlers {
         // loop through data
         // save db
 
-        let parsed_value: Root = serde_json::from_str(data).expect("wasn't able to convert");
+        let reg = Regex::new("\"currentPage\".+").unwrap();
+        println!("{:#?}", reg.find(data));
+
+        let parsed_value: Root = serde_json::from_str(data).unwrap();
 
         parsed_value
             .data

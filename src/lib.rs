@@ -7,10 +7,10 @@ use entities::*;
 pub use extractors::{handlers, Handlers};
 pub use initializers::{edusko_job_spawner, Site};
 use initializers::{ghanayello, goafricaonline_spawner};
-use md5::Digest;
 use rayon::prelude::*;
 use reqwest::Response;
 use sea_orm::*;
+use sha2::{Digest, Sha256};
 use std::{collections::HashMap, sync::mpsc::Receiver};
 use tokio::{
     sync::mpsc::{self, Sender},
@@ -31,13 +31,15 @@ pub enum Resp {
 /// number of pages so all pages url can be generated and scrapped asynchronously
 /// pages `Site`s from spawned tasks are channeled down stream to request spawner
 pub async fn job_spawner(sender: mpsc::Sender<Site>) -> Result<(), ()> {
-    let _ = try_join!(
-        edusko_job_spawner(sender.clone()),
-        // dummy(sender.clone()),
-        // schoolcompass::extract_urls(sender.clone()),
-        ghanayello::extract_urls(sender.clone()),
-        goafricaonline_spawner(sender.clone())
-    );
+    // edusko_job_spawner(sender.clone()).await;
+    goafricaonline_spawner(sender).await;
+    // let _ = try_join!(
+    //     edusko_job_spawner(sender.clone()),
+    //     // dummy(sender.clone()),
+    //     // schoolcompass::extract_urls(sender.clone()),
+    //     ghanayello::extract_urls(sender.clone()),
+    //     goafricaonline_spawner(sender.clone())
+    // );
     Ok(())
 }
 
@@ -138,7 +140,15 @@ pub async fn save_to_db(uri: &str, data: HashMap<&'static str, String>) -> Resul
             .expect("check spelling or check")
             .to_owned();
 
-        let hash = get_hash(&name);
+        let hash = get_hash(&format!("{}-{}", name, level));
+
+        let db = Database::connect(uri).await?;
+
+        // let sad_bakery: Option<school_data::Model> = school_data::Entity::find()
+        //     .filter(school_data::Column::NameHash.eq(&hash))
+        //     .filter(school_data::Column::level.eq(&))
+        //     .one(db)
+        //     .await?;
 
         let school = school_data::ActiveModel {
             school_name: ActiveValue::Set(name),
@@ -147,12 +157,10 @@ pub async fn save_to_db(uri: &str, data: HashMap<&'static str, String>) -> Resul
             country: ActiveValue::Set(country),
             school_type: ActiveValue::Set(level),
             logo: ActiveValue::Set(data.get("logo").cloned()),
-            algorithm: ActiveValue::Set("md5".to_owned()),
+            algorithm: ActiveValue::Set("sha256".to_owned()),
             city: ActiveValue::Set(data.get("city").cloned()),
             ..Default::default()
         };
-
-        let db = Database::connect(uri).await?;
 
         school.insert(&db).await?;
     }
@@ -161,7 +169,7 @@ pub async fn save_to_db(uri: &str, data: HashMap<&'static str, String>) -> Resul
 }
 
 pub fn get_hash(value: &str) -> String {
-    format!("{:x}", md5::Md5::digest(value.as_bytes()))
+    format!("{:x}", Sha256::digest(value))
 }
 
 #[cfg(test)]
