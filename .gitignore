@@ -1,8 +1,5 @@
 /target
 
-/migrations/target
-
-target/*
-
+/migration/target
 
 *.env
