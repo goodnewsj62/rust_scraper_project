@@ -202,4 +202,80 @@ pub mod handlers {
             })
             .collect()
     }
+
+    pub fn school_compass_extractor(data: &str) -> HashMap<&'static str, String> {
+        let document = Html::parse_document(data);
+        let name_selector =
+            Selector::parse(".detail-page-custom-main-div .paraBox ul li:first-child")
+                .expect("invalid selector");
+        let location_select =
+            Selector::parse("#contact-address-block li:last-child").expect("invalid selector");
+        let level_selector = Selector::parse("#educational-scope-block").expect("invalid selector");
+        let uls_selector =
+            Selector::parse(".list-unstyled.margin-bottom-zero").expect("Invalid selector");
+
+        let name = document
+            .select(&name_selector)
+            .next()
+            .expect("oops! could not extract name")
+            .text()
+            .collect::<String>()
+            .trim()
+            .to_owned();
+
+        let location = document
+            .select(&location_select)
+            .next()
+            .expect("oops! could not extract location")
+            .text()
+            .collect::<String>()
+            .trim()
+            .to_owned();
+
+        let phone_section_text = document
+            .select(&uls_selector)
+            .take(8)
+            .last()
+            .expect("no 8 element")
+            .text()
+            .collect::<String>()
+            .trim()
+            .to_owned();
+
+        let level_section_text = document
+            .select(&level_selector)
+            .next()
+            .expect("oops! could not extract level")
+            .text()
+            .collect::<String>()
+            .trim()
+            .to_owned();
+
+        let is_primary = Regex::new("[Pp]rimary")
+            .unwrap()
+            .is_match(&level_section_text);
+
+        let mut store = HashMap::from_iter([
+            ("name", name),
+            ("location", location),
+            ("country", "nigeria".to_owned()),
+            (
+                "level",
+                if is_primary {
+                    "nursery & primary".to_owned()
+                } else {
+                    "secondary".to_owned()
+                },
+            ),
+        ]);
+
+        if let Some(matched) = Regex::new(r#"([0-9].+\s[0-9].+\s[0-9].+)"#)
+            .unwrap()
+            .captures(&phone_section_text)
+        {
+            store.insert("phone", String::from(&matched[0]));
+        }
+
+        store
+    }
 }

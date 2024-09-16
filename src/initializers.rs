@@ -20,7 +20,6 @@ pub async fn edusko_job_spawner(sender: mpsc::Sender<Site>) -> Result<(), ()> {
     use schema::Root;
 
     let params: [String; 3] = ["nigeria".into(), "ghana".into(), "kenya".into()];
-    let params: [String; 1] = ["ghana".into()];
 
     // let mut handlers = Vec::new();
 
@@ -212,15 +211,16 @@ pub async fn goafricaonline_spawner(sender: mpsc::Sender<Site>) -> Result<(), ()
     Ok(())
 }
 
-//pub mod schoolcompass {
-//     use tokio::try_join;
+// pub mod schoolcompass {
+//     // use tokio::try_join;
 
 //     use super::*;
 
 //     pub async fn extract_urls(sender: mpsc::Sender<Site>) -> Result<(), ()> {
 //         let (trans, recv) = mpsc::unbounded_channel();
-
-//         let _ = try_join!(page_spawner(trans), get_detail_url(sender, recv));
+//         let _ = page_spawner(trans).await;
+//         let _ = get_detail_url(sender, recv).await;
+//         // let _ = try_join!(, );
 
 //         Ok(())
 //     }
@@ -230,11 +230,11 @@ pub async fn goafricaonline_spawner(sender: mpsc::Sender<Site>) -> Result<(), ()
 
 //         // let cloned_sender = sender.clone();
 //         // task::spawn(async move {
-//         //     extract_pages(cloned_sender, "primary", &base_url).await;
+//         //     extract_pages(cloned_sender, "secondary", base_url).await;
 //         // });
 
 //         task::spawn(async move {
-//             extract_pages(sender, "secondary", &base_url).await;
+//             extract_pages(sender, "primary", base_url).await;
 //         });
 
 //         Ok(())

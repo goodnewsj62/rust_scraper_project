@@ -18,8 +18,6 @@ async fn main() {
     let (result_tx, mut result_rx) = mpsc::channel(50000);
     let (send_process, rx_process) = syncmpsc::channel();
 
-    let _ = job_spawner(sender.clone()).await;
-
     let _ = try_join!(job_spawner(sender), request_spawner(receiver, result_tx));
 
     while let Some(message_) = result_rx.recv().await {

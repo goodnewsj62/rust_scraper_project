@@ -31,15 +31,14 @@ pub enum Resp {
 /// number of pages so all pages url can be generated and scrapped asynchronously
 /// pages `Site`s from spawned tasks are channeled down stream to request spawner
 pub async fn job_spawner(sender: mpsc::Sender<Site>) -> Result<(), ()> {
-    // edusko_job_spawner(sender.clone()).await;
-    goafricaonline_spawner(sender).await;
-    // let _ = try_join!(
-    //     edusko_job_spawner(sender.clone()),
-    //     // dummy(sender.clone()),
-    //     // schoolcompass::extract_urls(sender.clone()),
-    //     ghanayello::extract_urls(sender.clone()),
-    //     goafricaonline_spawner(sender.clone())
-    // );
+    // schoolcompass::extract_urls(sender).await;
+    let _ = try_join!(
+        edusko_job_spawner(sender.clone()),
+        // dummy(sender.clone()),
+        // schoolcompass::extract_urls(sender.clone()),
+        ghanayello::extract_urls(sender.clone()),
+        goafricaonline_spawner(sender.clone())
+    );
     Ok(())
 }
 
@@ -106,7 +105,7 @@ pub fn process_data(input: Receiver<FetchedResult>) -> Vec<HashMap<&'static str,
                 Handlers::Ghanayello => vec![handlers::ghanayello_data_extractor(&res)],
 
                 Handlers::GoAfricaOnline => handlers::goafrica_data_extractor(&res),
-                Handlers::SchoolCompass => vec![],
+                Handlers::SchoolCompass => vec![handlers::school_compass_extractor(&res)],
             }
         })
         .flat_map(|val| val)
